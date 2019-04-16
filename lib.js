@@ -10,7 +10,7 @@ const AK_ID = 'LTAIBw2Bq6CTrLa1'
 const AK_SECRET = 'vEsqDg0ja0GPoUjTzUcMHBj7AoHCv7'
 const CONFIDENCE = 50
 
-exports.faceCompare = async (ws, list, req) => {
+async function faceCompare(ws, list) {
   const screenshot = await screenShot()
   if (!screenshot || !screenshot.url) {
     throw new Error('Get screenshot url failed')
@@ -19,7 +19,7 @@ exports.faceCompare = async (ws, list, req) => {
     if (!item.face) {
       return
     }
-    const config = getFaceCompareReq({
+    const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/verify', {
       type: 0,
       image_url_1: screenshot.url,
       image_url_2: item.face
@@ -40,7 +40,7 @@ exports.faceCompare = async (ws, list, req) => {
             width: rectA[2],
             height: rectA[3]
           })
-          const { url: takenUrl } = await uploadImg('cut.jpg', 'image/jpeg', imageAfterCut)
+          const { url: takenUrl } = await uploadImg('cut.jpg', imageAfterCut)
           // 更新后端数据
           const { data: updateResponse } = await axios({
             method: 'PUT',
@@ -61,10 +61,10 @@ exports.faceCompare = async (ws, list, req) => {
   }
 }
 
-function getFaceCompareReq(body) {
+function getFaceCompareReq(targetUrl, body) {
   // 这里填写AK和请求
   const options = {
-    url: 'https://dtplus-cn-shanghai.data.aliyuncs.com/face/verify',
+    url: targetUrl,
     method: 'POST',
     data: body,
     headers: {
@@ -125,14 +125,14 @@ function screenShot() {
           console.log('delete screenshot fialed')
         }
       })
-      uploadImg(filename, 'image/jpeg', buffer)
+      uploadImg(filename, buffer)
         .then(data => resolve({ url: data.url, buffer }))
         .catch(error => reject(error))
     })
   })
 }
 
-function uploadImg(name, type = 'image/jpeg', buffer) {
+function uploadImg(name, buffer, type = 'image/jpeg') {
   return axios
     .post('http://wd.gtays.cn/ugc/pet_blind_date/invoke/img_upload', {
       files: {
@@ -150,4 +150,39 @@ function cutImg(buffer, option) {
   return sharp(buffer)
     .extract({ left, top, width, height })
     .toBuffer()
+}
+
+async function getAllFaces() {
+  const screenshot = await screenShot()
+  const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/detect', {
+    type: 0,
+    image_url: screenshot.url
+  })
+  const { data } = await axios(config)
+
+  if (data.errno !== 0) {
+    throw new Error(data.err_msg)
+  }
+
+  let imgRects = []
+
+  for (let i = 0; i < data.face_rect.length; i += 4) {
+    const [left, top, width, height] = data.face_rect.slice(i, i + 4)
+    imgRects.push({ left, top, width, height })
+  }
+  return Promise.all(
+    imgRects.map(async rect => {
+      const extractedImg = await cutImg(screenshot.buffer, rect)
+      const { url } = await uploadImg('extract.jpg', extractedImg)
+      return {
+        url,
+        buffer: extractedImg
+      }
+    })
+  )
+}
+
+module.exports = {
+  faceCompare,
+  getAllFaces
 }
