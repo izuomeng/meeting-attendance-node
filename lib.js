@@ -11,53 +11,53 @@ const AK_SECRET = 'vEsqDg0ja0GPoUjTzUcMHBj7AoHCv7'
 const CONFIDENCE = 50
 
 async function faceCompare(ws, list) {
-  const screenshot = await screenShot()
-  if (!screenshot || !screenshot.url) {
-    throw new Error('Get screenshot url failed')
+  // 获取监控视频内的所有人脸
+  const allFaces = await getAllFaces()
+
+  if (!Array.isArray(allFaces) || allFaces.length < 1) {
+    return
   }
+
   for (const item of list) {
     if (!item.face) {
       return
     }
-    const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/verify', {
-      type: 0,
-      image_url_1: screenshot.url,
-      image_url_2: item.face
-    })
-    axios(config)
-      .then(async ({ data }) => {
-        if (data.errno !== 0) {
-          throw new Error(data.err_msg)
-        }
-
-        const { confidence, rectA } = data
-        // 成功识别到人脸
-        if (confidence > CONFIDENCE) {
-          // 把拍到的人脸区域挖出来，传到服务器上
-          const imageAfterCut = await cutImg(screenshot.buffer, {
-            left: rectA[0],
-            top: rectA[1],
-            width: rectA[2],
-            height: rectA[3]
-          })
-          const { url: takenUrl } = await uploadImg('cut.jpg', imageAfterCut)
-          // 更新后端数据
-          const { data: updateResponse } = await axios({
-            method: 'PUT',
-            url: `http://localhost:8888/api/meeting/sign`,
-            data: `id=${item.id}&attendance=1&time=${moment().format(
-              'YYYY-MM-DD HH:mm:ss'
-            )}&image=${takenUrl}`,
-            headers: { 'content-type': 'application/x-www-form-urlencoded' }
-          })
-
-          if (updateResponse.status === 0) {
-            // TODO: need refactoring
-            ws.send(JSON.stringify({ type: 1 })) // 告诉浏览器重新拉取数据
-          }
-        }
+    // 将拍到的每一张人脸与人脸库中的照片做比对
+    for (const takenImg of allFaces) {
+      const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/verify', {
+        type: 0,
+        image_url_1: takenImg.url,
+        image_url_2: item.face
       })
-      .catch(error => console.log(error))
+      
+      axios(config)
+        .then(async ({ data }) => {
+          
+          if (data.errno !== 0) {
+            throw new Error(data.err_msg)
+          }
+
+          const { confidence } = data
+          // 成功识别到人脸
+          if (confidence > CONFIDENCE) {
+            // 更新后端数据
+            const { data: updateResponse } = await axios({
+              method: 'PUT',
+              url: `http://localhost:8888/api/meeting/sign`,
+              data: `id=${item.id}&attendance=1&time=${moment().format(
+                'YYYY-MM-DD HH:mm:ss'
+              )}&image=${takenImg.url}`,
+              headers: { 'content-type': 'application/x-www-form-urlencoded' }
+            })
+
+            if (updateResponse.status === 0) {
+              // TODO: need refactoring
+              ws.send(JSON.stringify({ type: 1 })) // 告诉浏览器重新拉取数据
+            }
+          }
+        })
+        .catch(error => console.log(error))
+    }
   }
 }
 
@@ -176,7 +176,7 @@ async function getAllFaces() {
       const { url } = await uploadImg('extract.jpg', extractedImg)
       return {
         url,
-        buffer: extractedImg
+        // buffer: extractedImg
       }
     })
   )

@@ -22,7 +22,7 @@ ws.on('connection', (ws) => {
 
       faceCompare(ws, list)
 
-      getAllFaces().then(console.log)
+      // getAllFaces().then(console.log)
     }
   })
 })
