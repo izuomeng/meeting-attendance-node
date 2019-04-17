@@ -14,13 +14,20 @@ async function faceCompare(ws, list) {
   // 获取监控视频内的所有人脸
   const allFaces = await getAllFaces()
 
+  console.log(allFaces)
+
   if (!Array.isArray(allFaces) || allFaces.length < 1) {
-    return
+    return ws.send(JSON.stringify({ type: 5 })) // 表示人脸识别结束，但无需重新请求数据
   }
 
   for (const item of list) {
+    // 没有人脸库照片
     if (!item.face) {
-      return
+      continue
+    }
+    // 已经签到过
+    if (item.signTime && item.image) {
+      continue
     }
     // 将拍到的每一张人脸与人脸库中的照片做比对
     for (const takenImg of allFaces) {
@@ -29,10 +36,9 @@ async function faceCompare(ws, list) {
         image_url_1: takenImg.url,
         image_url_2: item.face
       })
-      
+
       axios(config)
         .then(async ({ data }) => {
-          
           if (data.errno !== 0) {
             throw new Error(data.err_msg)
           }
@@ -166,16 +172,19 @@ async function getAllFaces() {
 
   let imgRects = []
 
-  for (let i = 0; i < data.face_rect.length; i += 4) {
-    const [left, top, width, height] = data.face_rect.slice(i, i + 4)
-    imgRects.push({ left, top, width, height })
+  if (data.face_rect) {
+    for (let i = 0; i < data.face_rect.length; i += 4) {
+      const [left, top, width, height] = data.face_rect.slice(i, i + 4)
+      imgRects.push({ left, top, width, height })
+    }
   }
+
   return Promise.all(
     imgRects.map(async rect => {
       const extractedImg = await cutImg(screenshot.buffer, rect)
       const { url } = await uploadImg('extract.jpg', extractedImg)
       return {
-        url,
+        url
         // buffer: extractedImg
       }
     })
