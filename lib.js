@@ -52,7 +52,7 @@ async function faceCompare(ws, list) {
               url: `http://localhost:8888/api/meeting/sign`,
               data: `id=${item.id}&attendance=1&time=${moment().format(
                 'YYYY-MM-DD HH:mm:ss'
-              )}&image=${takenImg.url}`,
+              )}&image=${takenImg.url}&camera=摄像头一号`,
               headers: { 'content-type': 'application/x-www-form-urlencoded' }
             })
 
@@ -159,36 +159,40 @@ function cutImg(buffer, option) {
 }
 
 async function getAllFaces() {
-  const screenshot = await screenShot()
-  const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/detect', {
-    type: 0,
-    image_url: screenshot.url
-  })
-  const { data } = await axios(config)
-
-  if (data.errno !== 0) {
-    throw new Error(data.err_msg)
-  }
-
-  let imgRects = []
-
-  if (data.face_rect) {
-    for (let i = 0; i < data.face_rect.length; i += 4) {
-      const [left, top, width, height] = data.face_rect.slice(i, i + 4)
-      imgRects.push({ left, top, width, height })
-    }
-  }
-
-  return Promise.all(
-    imgRects.map(async rect => {
-      const extractedImg = await cutImg(screenshot.buffer, rect)
-      const { url } = await uploadImg('extract.jpg', extractedImg)
-      return {
-        url
-        // buffer: extractedImg
-      }
+  try {
+    const screenshot = await screenShot()
+    const config = getFaceCompareReq('https://dtplus-cn-shanghai.data.aliyuncs.com/face/detect', {
+      type: 0,
+      image_url: screenshot.url
     })
-  )
+    const { data } = await axios(config)
+
+    if (data.errno !== 0) {
+      throw new Error(data.err_msg)
+    }
+
+    let imgRects = []
+
+    if (data.face_rect) {
+      for (let i = 0; i < data.face_rect.length; i += 4) {
+        const [left, top, width, height] = data.face_rect.slice(i, i + 4)
+        imgRects.push({ left, top, width, height })
+      }
+    }
+
+    return Promise.all(
+      imgRects.map(async rect => {
+        const extractedImg = await cutImg(screenshot.buffer, rect)
+        const { url } = await uploadImg('extract.jpg', extractedImg)
+        return {
+          url
+          // buffer: extractedImg
+        }
+      })
+    )
+  } catch (error) {
+    return []
+  }
 }
 
 module.exports = {
