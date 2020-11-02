@@ -6,8 +6,8 @@ const fs = require('fs')
 const moment = require('moment')
 const sharp = require('sharp')
 
-const AK_ID = 'LTAIBw2Bq6CTrLa1'
-const AK_SECRET = 'vEsqDg0ja0GPoUjTzUcMHBj7AoHCv7'
+const AK_ID = ''
+const AK_SECRET = ''
 const CONFIDENCE = 50
 
 async function faceCompare(ws, list) {
